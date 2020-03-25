@@ -59,7 +59,7 @@ all_data_admin0 %>%
   scale_y_log10(labels = scales::comma) + ylab("Confirmed [log]") +
   labs(title = "Confirmed cases by date", colour = "Country") 
   
-ggsave(filename = "confirmed by date.png")
+ggsave(filename = "confirmed_by_date.png")
 
 all_data_admin0 %>%
   filter(admin0 %in% chart_list) %>%
@@ -67,4 +67,4 @@ all_data_admin0 %>%
 #  scale_y_log10(labels = scales::comma) +
   labs(title = "Confirmed cases by day since first case")
 
-ggsave(filename = "confirmed by day.png")
+ggsave(filename = "confirmed_by_day.png")
