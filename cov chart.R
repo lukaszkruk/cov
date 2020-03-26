@@ -35,6 +35,8 @@ deaths_tidy <- tidy_CSSE_admin0(tidy_CSSE(Deaths, value_col = 'Deaths'), value_c
 
 recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered'), value_col = 'Recovered')
 
+threshold = 20
+
 all_data_admin0 <- left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'unique_id'))%>%
   left_join(recovered_tidy, by = c('unique_id' = 'unique_id'))%>%
   select(-contains("."))%>%
@@ -42,29 +44,45 @@ all_data_admin0 <- left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'u
   group_by(admin0) %>%
   mutate(Active = (Confirmed - (Recovered + Deaths)),
          Day = row_number(dplyr::na_if(Confirmed, 0)),
-         `Daily percentage change` = ifelse(Confirmed > 5,
-                                            (Confirmed/lag(Confirmed)-1)*100, 
-                                            NA
-                                            ),
-         `Daily change of daily percentage change` = `Daily percentage change` - lag(`Daily percentage change`)
+         `New cases daily percentage change` = ifelse(Confirmed > threshold,
+                                                      (Confirmed/lag(Confirmed)-1)*100, 
+                                                      NA
+         ),
+         `Active cases daily percentage change` = ifelse(Active > threshold,
+                                                      (Active/lag(Active)-1)*100, 
+                                                      NA
+         ),
+         `Daily change of daily percentage change` = `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
          ) 
 
-
-
-chart_list = c("Switzerland", "Italy", "China", "France", "Poland", "United Kingdom", "Spain")
+chart_list = c("Switzerland", "Italy", "China", "France", "Poland")
 
 all_data_admin0 %>%
   filter(admin0 %in% chart_list) %>%
-  ggplot(aes(x=Date, y=Confirmed, colour=admin0)) + geom_line() + theme_minimal() + 
+  ggplot(aes(x=Date, y=Active, colour=admin0)) + geom_line() + theme_minimal() + 
   scale_y_log10(labels = scales::comma) + ylab("Confirmed [log]") +
-  labs(title = "Confirmed cases by date", colour = "Country") 
+  labs(title = "Active cases by date", colour = "Country") 
   
 ggsave(filename = "confirmed_by_date.png")
 
 all_data_admin0 %>%
   filter(admin0 %in% chart_list) %>%
-  ggplot(aes(x=Day, y=Confirmed, colour=admin0)) + geom_line() + theme_minimal() + 
-#  scale_y_log10(labels = scales::comma) +
-  labs(title = "Confirmed cases by day since first case")
+  ggplot(aes(x=Day, y=Active, colour=admin0)) + geom_line() + theme_minimal() + 
+  scale_y_continuous(labels = scales::comma) + labs(title = "Active cases by day since first case")
 
 ggsave(filename = "confirmed_by_day.png")
+
+all_data_admin0 %>%
+  filter(admin0 %in% chart_list) %>%
+  ggplot(aes(x=Date, y=`New cases daily percentage change`, colour=admin0)) + geom_smooth(se=F) + theme_minimal() +
+  labs(title = "Number of new cases compared to previous day, per cent", caption = "Anything above zero means new cases are being recorded. Daily change of 26% means doubling of case numbers every 3 days.")
+
+all_data_admin0 %>%
+  filter(admin0 %in% chart_list) %>%
+  ggplot(aes(x=Date, y=`Daily change of daily percentage change`, colour=admin0)) + geom_smooth(se=F) + theme_minimal() +
+labs(title = "Change of speed of increase of active cases", 
+     caption = "Positive values mean that active cases are increasing at an increasing rate. 
+     Negative values mean that active cases are increasing at a decreasing rate. 
+     Well, not really. The math is off for now.")
+
+
