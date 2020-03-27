@@ -93,15 +93,11 @@ all_data_admin0 %>%
 
 covplot + aes(x=Date, y=Active, colour=admin0) +
   scale_y_log10(labels = scales::comma) + 
-  labs(title = "Active cases by date", colour = "Country") 
+  labs(title = "Active cases by date, log scale", colour = "Country") 
   
-# ggsave(filename = "confirmed_by_date.png")
-
 covplot + aes(x=Date, y=Active, colour=admin0) +
   aes(x=Day, y=Active, colour=admin0) +
   scale_y_continuous(labels = scales::comma) + labs(title = "Active cases by day since first case")
-
-# ggsave(filename = "confirmed_by_day.png")
 
 covplot + 
   aes(x=Date, y=`New cases daily percentage change`, colour=admin0)+ geom_smooth(se=F) +
@@ -117,14 +113,12 @@ covplot +
      Negative values mean that active cases are increasing at a decreasing rate. 
      Well, not really. The math is off for now.")
 
-
-
-
 ```
 
 ## To do
 
 * switch data source to ECDC or JHU?
+* add country population, compute cases per capita
 * compute and chart moving window weekly (3-day?) case increase averages
 
 * labels

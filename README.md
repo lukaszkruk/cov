@@ -85,7 +85,7 @@ all_data_admin0 %>%
 ``` r
 covplot + aes(x=Date, y=Active, colour=admin0) +
   scale_y_log10(labels = scales::comma) + 
-  labs(title = "Active cases by date", colour = "Country") 
+  labs(title = "Active cases by date, log scale", colour = "Country") 
 ```
 
     ## Warning: Transformation introduced infinite values in continuous y-axis
@@ -93,8 +93,6 @@ covplot + aes(x=Date, y=Active, colour=admin0) +
 ![](readme_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
 ``` r
-# ggsave(filename = "confirmed_by_date.png")
-
 covplot + aes(x=Date, y=Active, colour=admin0) +
   aes(x=Day, y=Active, colour=admin0) +
   scale_y_continuous(labels = scales::comma) + labs(title = "Active cases by day since first case")
@@ -105,8 +103,6 @@ covplot + aes(x=Date, y=Active, colour=admin0) +
 ![](readme_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
 
 ``` r
-# ggsave(filename = "confirmed_by_day.png")
-
 covplot + 
   aes(x=Date, y=`New cases daily percentage change`, colour=admin0)+ geom_smooth(se=F) +
   labs(title = "Number of new cases compared to previous day, per cent", 
@@ -143,6 +139,8 @@ covplot +
 ## To do
 
   - switch data source to ECDC or JHU?
+
+  - add country population, compute cases per capita
 
   - compute and chart moving window weekly (3-day?) case increase
     averages
