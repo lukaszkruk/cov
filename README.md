@@ -1,6 +1,11 @@
 some covid-19 charts
 ================
 
+## 
+
+switched data to the new CSSE format, something’s messed up now. Loads
+of NAs.
+
 ``` r
 Confirmed <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
 Deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
@@ -53,27 +58,25 @@ chart\_list defined which countries to chart. Duh.
 
 ``` r
 threshold = 20
-chart_list = c("Switzerland", "Italy", "China", "Poland")
+chart_list = c("Switzerland", "Italy", "China", "Armenia")
 ```
 
 ``` r
 all_data_admin0 <- left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'unique_id'))%>%
   left_join(recovered_tidy, by = c('unique_id' = 'unique_id'))%>%
-  select(-contains("."))%>%
-  select(admin0, iso_alpha3, Date, Confirmed, Deaths, Recovered) %>%
+  # select(-contains("."))%>%
+  select(admin0 = admin0.x, Date=Date.x, Confirmed, Deaths, Recovered) %>%
+  replace_na(list(Recovered = 0, Deaths = 0)) %>%
   group_by(admin0) %>%
+  filter(Confirmed > threshold) %>%
+  # group_by(admin0) %>%
   mutate(Active = (Confirmed - (Recovered + Deaths)),
-         Day = row_number(dplyr::na_if(Confirmed, 0)),
-         Mortality = Deaths/Confirmed,
-         `New cases daily percentage change` = ifelse(Confirmed > threshold,
-                                                      (Confirmed/lag(Confirmed)-1)*100, 
-                                                      NA
-         ),
-         `Active cases daily percentage change` = ifelse(Active > threshold,
-                                                      (Active/lag(Active)-1)*100, 
-                                                      NA
-         ),
-         `Daily change of daily percentage change` = `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
+         Day = row_number(1:n()),
+         Mortality = Deaths/Confirmed*100,
+         `New cases daily percentage change` = (Confirmed/lag(Confirmed)-1)*100,
+         `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
+         `Daily change of daily percentage change` = 
+           `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
          ) 
 
 all_data_admin0 %>%
@@ -88,23 +91,20 @@ covplot + aes(x=Date, y=Active, colour=admin0) +
   labs(title = "Active cases by date, log scale", colour = "Country") 
 ```
 
-    ## Warning: Transformation introduced infinite values in continuous y-axis
-
 ![](readme_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
 ``` r
 covplot + aes(x=Date, y=Active, colour=admin0) +
   aes(x=Day, y=Active, colour=admin0) +
-  scale_y_continuous(labels = scales::comma) + labs(title = "Active cases by day since first case")
+  scale_y_continuous(labels = scales::comma) + labs(title = paste("Active cases by day, since the day", threshold, "cases were first recorded"))
 ```
-
-    ## Warning: Removed 85 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
 
 ``` r
 covplot + 
   aes(x=Date, y=`New cases daily percentage change`, colour=admin0)+ geom_smooth(se=F) +
+  ylim(0, 50) +
   labs(title = "Number of new cases compared to previous day, per cent", 
        caption = "Anything above zero means new cases are being recorded. 
        Daily change of 26% means doubling of case number every 3 days.")
@@ -112,16 +112,18 @@ covplot +
 
     ## `geom_smooth()` using method = 'loess' and formula 'y ~ x'
 
-    ## Warning: Removed 119 rows containing non-finite values (stat_smooth).
+    ## Warning: Removed 14 rows containing non-finite values (stat_smooth).
 
-    ## Warning: Removed 119 rows containing missing values (geom_path).
+    ## Warning: Removed 7 rows containing missing values (geom_path).
+
+    ## Warning: Removed 22 rows containing missing values (geom_smooth).
 
 ![](readme_files/figure-gfm/unnamed-chunk-1-3.png)<!-- -->
 
 ``` r
 covplot + 
   aes(x=Date, y=`Daily change of daily percentage change`, colour=admin0) + 
-  geom_smooth(se=F) +
+  geom_smooth(se=F) + ylim(-10, 10) +
   labs(title = "Change of speed of increase of active cases", 
      caption = "Positive values mean that active cases are increasing at an increasing rate. 
      Negative values mean that active cases are increasing at a decreasing rate. 
@@ -130,9 +132,26 @@ covplot +
 
     ## `geom_smooth()` using method = 'loess' and formula 'y ~ x'
 
-    ## Warning: Removed 123 rows containing non-finite values (stat_smooth).
+    ## Warning: Removed 49 rows containing non-finite values (stat_smooth).
 
-    ## Warning: Removed 123 rows containing missing values (geom_path).
+    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
+    ## parametric, : span too small. fewer data values than degrees of freedom.
+
+    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
+    ## parametric, : pseudoinverse used at 18342
+
+    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
+    ## parametric, : neighborhood radius 2.025
+
+    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
+    ## parametric, : reciprocal condition number 0
+
+    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
+    ## parametric, : There are other near singularities as well. 9.1506
+
+    ## Warning: Removed 20 rows containing missing values (geom_path).
+
+    ## Warning: Removed 12 rows containing missing values (geom_smooth).
 
 ![](readme_files/figure-gfm/unnamed-chunk-1-4.png)<!-- -->
 

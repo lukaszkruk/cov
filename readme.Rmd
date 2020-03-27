@@ -9,7 +9,9 @@ library(tidyverse)
 
 ```
 
+##
 
+switched data to the new CSSE format, something's messed up now. Loads of NAs.
 
 ```{r data, message=FALSE}
 
@@ -46,8 +48,6 @@ confirmed_tidy <- tidy_CSSE_admin0(tidy_CSSE(Confirmed, value_col = 'Confirmed')
 deaths_tidy <- tidy_CSSE_admin0(tidy_CSSE(Deaths, value_col = 'Deaths'), value_col = 'Deaths')
 recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered'), value_col = 'Recovered')
 
-
-
 ``` 
 ## parameters
 
@@ -57,28 +57,26 @@ chart_list defined which countries to chart. Duh.
 
 ```{r variables}
 threshold = 20
-chart_list = c("Switzerland", "Italy", "China", "Poland")
+chart_list = c("Switzerland", "Italy", "China", "Armenia")
 ```
 
 ```{r the basics}
 
 all_data_admin0 <- left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'unique_id'))%>%
   left_join(recovered_tidy, by = c('unique_id' = 'unique_id'))%>%
-  select(-contains("."))%>%
-  select(admin0, iso_alpha3, Date, Confirmed, Deaths, Recovered) %>%
+  # select(-contains("."))%>%
+  select(admin0 = admin0.x, Date=Date.x, Confirmed, Deaths, Recovered) %>%
+  replace_na(list(Recovered = 0, Deaths = 0)) %>%
   group_by(admin0) %>%
+  filter(Confirmed > threshold) %>%
+  # group_by(admin0) %>%
   mutate(Active = (Confirmed - (Recovered + Deaths)),
-         Day = row_number(dplyr::na_if(Confirmed, 0)),
-         Mortality = Deaths/Confirmed,
-         `New cases daily percentage change` = ifelse(Confirmed > threshold,
-                                                      (Confirmed/lag(Confirmed)-1)*100, 
-                                                      NA
-         ),
-         `Active cases daily percentage change` = ifelse(Active > threshold,
-                                                      (Active/lag(Active)-1)*100, 
-                                                      NA
-         ),
-         `Daily change of daily percentage change` = `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
+         Day = row_number(1:n()),
+         Mortality = Deaths/Confirmed*100,
+         `New cases daily percentage change` = (Confirmed/lag(Confirmed)-1)*100,
+         `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
+         `Daily change of daily percentage change` = 
+           `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
          ) 
 
 all_data_admin0 %>%
@@ -97,17 +95,18 @@ covplot + aes(x=Date, y=Active, colour=admin0) +
   
 covplot + aes(x=Date, y=Active, colour=admin0) +
   aes(x=Day, y=Active, colour=admin0) +
-  scale_y_continuous(labels = scales::comma) + labs(title = "Active cases by day since first case")
+  scale_y_continuous(labels = scales::comma) + labs(title = paste("Active cases by day, since the day", threshold, "cases were first recorded"))
 
 covplot + 
   aes(x=Date, y=`New cases daily percentage change`, colour=admin0)+ geom_smooth(se=F) +
+  ylim(0, 50) +
   labs(title = "Number of new cases compared to previous day, per cent", 
        caption = "Anything above zero means new cases are being recorded. 
        Daily change of 26% means doubling of case number every 3 days.")
 
 covplot + 
   aes(x=Date, y=`Daily change of daily percentage change`, colour=admin0) + 
-  geom_smooth(se=F) +
+  geom_smooth(se=F) + ylim(-10, 10) +
   labs(title = "Change of speed of increase of active cases", 
      caption = "Positive values mean that active cases are increasing at an increasing rate. 
      Negative values mean that active cases are increasing at a decreasing rate. 
