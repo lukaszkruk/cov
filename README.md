@@ -1,12 +1,24 @@
 some covid-19 charts
 ================
 
-## 
+## Parameters
 
-switched data to the new CSSE format, something’s messed up now. Loads
-of NAs.
+All data points where confirmed cases are below the `threshold` are
+discarded, which makes for cleaner charts. This is because the number of
+cases tends to exhibit nice exponential behaviour from 10 or so cases
+upwards. `chart_list` defines which countries to chart. Duh.
 
 ``` r
+threshold = 10
+chart_list = c("Switzerland", "Italy", "China", "Armenia")
+```
+
+## Load data
+
+``` r
+library(tidyverse)
+
+
 Confirmed <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
 Deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
 Recovered <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
@@ -48,44 +60,34 @@ deaths_tidy <- tidy_CSSE_admin0(tidy_CSSE(Deaths, value_col = 'Deaths'), value_c
 recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered'), value_col = 'Recovered')
 ```
 
-## parameters
-
-threshold serves for making cleaner charts. The number of cases tends to
-exhibit nice exponential behaviour from 10 cases upwards, setting it to
-20 with some extra safety margin.
-
-chart\_list defined which countries to chart. Duh.
+## Process
 
 ``` r
-threshold = 20
-chart_list = c("Switzerland", "Italy", "China", "Armenia")
-```
-
-``` r
-all_data_admin0 <- left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'unique_id'))%>%
-  left_join(recovered_tidy, by = c('unique_id' = 'unique_id'))%>%
-  # select(-contains("."))%>%
+  left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'unique_id')) %>%
+  left_join(recovered_tidy, by = c('unique_id' = 'unique_id')) %>%
   select(admin0 = admin0.x, Date=Date.x, Confirmed, Deaths, Recovered) %>%
   replace_na(list(Recovered = 0, Deaths = 0)) %>%
   group_by(admin0) %>%
   filter(Confirmed > threshold) %>%
-  # group_by(admin0) %>%
-  mutate(Active = (Confirmed - (Recovered + Deaths)),
+  mutate(Active = Confirmed - (Recovered + Deaths),
          Day = row_number(1:n()),
          Mortality = Deaths/Confirmed*100,
          `New cases daily percentage change` = (Confirmed/lag(Confirmed)-1)*100,
          `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
          `Daily change of daily percentage change` = 
            `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
-         ) 
-
-all_data_admin0 %>%
-  filter(admin0 %in% chart_list) %>%
-  ggplot() + geom_line() + theme_minimal() ->
-  covplot
+         ) ->
+  all_data_admin0
 ```
 
+## Chart
+
 ``` r
+all_data_admin0 %>%
+  filter(admin0 %in% chart_list) %>%
+  ggplot() + geom_line(alpha=.6) + theme_minimal() ->
+  covplot
+
 covplot + aes(x=Date, y=Active, colour=admin0) +
   scale_y_log10(labels = scales::comma) + 
   labs(title = "Active cases by date, log scale", colour = "Country") 
@@ -112,9 +114,9 @@ covplot +
 
     ## `geom_smooth()` using method = 'loess' and formula 'y ~ x'
 
-    ## Warning: Removed 14 rows containing non-finite values (stat_smooth).
+    ## Warning: Removed 15 rows containing non-finite values (stat_smooth).
 
-    ## Warning: Removed 7 rows containing missing values (geom_path).
+    ## Warning: Removed 6 rows containing missing values (geom_path).
 
     ## Warning: Removed 22 rows containing missing values (geom_smooth).
 
@@ -132,7 +134,7 @@ covplot +
 
     ## `geom_smooth()` using method = 'loess' and formula 'y ~ x'
 
-    ## Warning: Removed 49 rows containing non-finite values (stat_smooth).
+    ## Warning: Removed 51 rows containing non-finite values (stat_smooth).
 
     ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
     ## parametric, : span too small. fewer data values than degrees of freedom.
@@ -149,9 +151,9 @@ covplot +
     ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
     ## parametric, : There are other near singularities as well. 9.1506
 
-    ## Warning: Removed 20 rows containing missing values (geom_path).
+    ## Warning: Removed 17 rows containing missing values (geom_path).
 
-    ## Warning: Removed 12 rows containing missing values (geom_smooth).
+    ## Warning: Removed 11 rows containing missing values (geom_smooth).
 
 ![](readme_files/figure-gfm/unnamed-chunk-1-4.png)<!-- -->
 
@@ -161,8 +163,8 @@ covplot +
 
   - add country population, compute cases per capita
 
-  - compute and chart moving window weekly (3-day?) case increase
-    averages
+  - compute and chart moving window weekly (3-day?) averages, because
+    these charts are a mess
 
   - labels
     
