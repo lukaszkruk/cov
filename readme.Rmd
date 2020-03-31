@@ -1,5 +1,5 @@
 ---
-title: "some covid-19 charts"
+title: "Some COVID-19 charts"
 output: github_document
 ---
 
@@ -11,57 +11,54 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Parameters
 
 All data points where confirmed cases are below the ``threshold`` are discarded, which makes for cleaner charts. This is because the number of cases tends to exhibit nice exponential behaviour from 10 or so cases upwards.
-``chart_list`` defines which countries to chart. Duh.
+``places_to_chart`` defines which countries to chart. Duh.
 
 ```{r variables}
 threshold = 10
-chart_list = c("Switzerland", "Italy", "China", "Armenia")
+places_to_chart = c("Switzerland", "Italy", "China", "Poland", "US")
 ```
 
 ## Load data
 
-```{r data, message=FALSE}
+```{r load, message=FALSE}
 library(tidyverse)
+library(zoo)
 
+confirmed_raw <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+deaths_raw <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+recovered_raw <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
 
-Confirmed <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
-Deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
-Recovered <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
-isoalpha3 <- read_csv('https://gist.githubusercontent.com/tadast/8827699/raw/7255fdfbf292c592b75cf5f7a19c16ea59735f74/countries_codes_and_coordinates.csv')%>%
-  select(Country, `Alpha-3 code`) %>%
-  rename(iso_alpha3 = `Alpha-3 code`)
+# isoalpha3 <- read_csv('https://gist.githubusercontent.com/tadast/8827699/raw/7255fdfbf292c592b75cf5f7a19c16ea59735f74/countries_codes_and_coordinates.csv') %>%
+#   select(Country, `Alpha-3 code`) %>%
+#   rename(iso_alpha3 = `Alpha-3 code`)
 
-tidy_CSSE <- function(data, value_col = "Confirmed"){
-  data%>%
+tidy_CSSE <- function(data, value_col){
+
+    sum_col <- paste0(value_col)
+    new_col <- paste0(enquo(value_col))[2]
+
+    data %>%
     rename('admin1' = 'Province/State',
-           'admin0' = 'Country/Region')%>%
-    pivot_longer(cols = contains("/"), names_to = 'date_raw', values_to = value_col)%>%
-    select(-Lat, -Long)%>%
-    mutate(Date = as.Date(date_raw, format = "%m/%d/%y"))
-}
-
-tidy_CSSE_admin0 <- function(data, value_col = "Confirmed"){
-  sum_col <- paste0(value_col)
-  new_col <- paste0(enquo(value_col))[2]
-
-  data %>%
-    group_by(admin0, Date)%>%
-    summarise(!!new_col := sum(!!sym(sum_col)))%>%
-    left_join(isoalpha3, by = c('admin0' = 'Country'))%>%
-    mutate(unique_id = paste0(iso_alpha3, Date))%>%
+           'admin0' = 'Country/Region') %>%
+    select(-Lat, -Long) %>%
+    pivot_longer(cols = contains("/"), names_to = 'date_raw', values_to = value_col) %>%
+    mutate(Date = as.Date(date_raw, format = "%m/%d/%y")) %>%
+    group_by(admin0, Date) %>%
+    summarise(!!new_col := sum(!!sym(sum_col))) %>%
+    # left_join(isoalpha3, by = c('admin0' = 'Country')) %>%
+    mutate(unique_id = paste0(admin0, Date)) %>%
     ungroup()
   }
 
-
-confirmed_tidy <- tidy_CSSE_admin0(tidy_CSSE(Confirmed, value_col = 'Confirmed'), value_col = 'Confirmed')
-deaths_tidy <- tidy_CSSE_admin0(tidy_CSSE(Deaths, value_col = 'Deaths'), value_col = 'Deaths')
-recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered'), value_col = 'Recovered')
+confirmed_tidy <- tidy_CSSE(confirmed_raw, "Confirmed")
+deaths_tidy <- tidy_CSSE(deaths_raw, "Deaths")
+recovered_tidy <- tidy_CSSE(recovered_raw, "Recovered")
 
 ``` 
 
 ## Process
 
-```{r the basics}
+```{r process}
 
   left_join(confirmed_tidy,deaths_tidy, by = c('unique_id' = 'unique_id')) %>%
   left_join(recovered_tidy, by = c('unique_id' = 'unique_id')) %>%
@@ -72,10 +69,13 @@ recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered')
   mutate(Active = Confirmed - (Recovered + Deaths),
          Day = row_number(1:n()),
          Mortality = Deaths/Confirmed*100,
-         `New cases daily percentage change` = (Confirmed/lag(Confirmed)-1)*100,
-         `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
-         `Daily change of daily percentage change` = 
-           `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
+         confirmed_delta = (Confirmed/lag(Confirmed)-1)*100,
+         `Day-to-day change of confirmed cases` = rollmean(x = confirmed_delta, k = 3, align = "right", fill = NA),
+         confirmed_delta_delta = (`Day-to-day change of confirmed cases`/lag(`Day-to-day change of confirmed cases`)-1)*100,
+         `Day-to-day change of rate of change of number of confirmed cases` = rollmean(x = confirmed_delta_delta, k = 6, align = "right", fill = NA),
+         # `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
+         # `Daily change of daily percentage change` = 
+         #   `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
          ) ->
   all_data_admin0
 
@@ -83,41 +83,48 @@ recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered')
  
 ## Chart
  
-```{r}
+```{r chart}
 
 all_data_admin0 %>%
-  filter(admin0 %in% chart_list) %>%
-  ggplot() + geom_line(alpha=.6) + theme_minimal() ->
+  filter(admin0 %in% places_to_chart) %>%
+  ggplot() + geom_line() + theme_minimal() ->
   covplot
 
 covplot + aes(x=Date, y=Active, colour=admin0) +
   scale_y_log10(labels = scales::comma) + 
   labs(title = "Active cases by date, log scale", colour = "Country") 
   
-covplot + aes(x=Date, y=Active, colour=admin0) +
-  aes(x=Day, y=Active, colour=admin0) +
+covplot + aes(x=Day, y=Active, colour=admin0) +
   scale_y_continuous(labels = scales::comma) + labs(title = paste("Active cases by day, since the day", threshold, "cases were first recorded"))
 
 covplot + 
-  aes(x=Date, y=`New cases daily percentage change`, colour=admin0)+ geom_smooth(se=F) +
-  ylim(0, 50) +
+  aes(x=Date, y=`Day-to-day change of confirmed cases`, colour=admin0)+ 
+  # geom_smooth(se=F) +
+  # ylim(0, 50) +
   labs(title = "Number of new cases compared to previous day, per cent", 
+       subtitle = "3 day rolling mean",
        caption = "Anything above zero means new cases are being recorded. 
        Daily change of 26% means doubling of case number every 3 days.")
 
 covplot + 
-  aes(x=Date, y=`Daily change of daily percentage change`, colour=admin0) + 
-  geom_smooth(se=F) + ylim(-10, 10) +
+  aes(x=Date, y=`Day-to-day change of rate of change of number of confirmed cases`, colour=admin0) + 
+  # geom_smooth(se=F) + 
   labs(title = "Change of speed of increase of active cases", 
+       subtitle = "7 day rolling mean",
      caption = "Positive values mean that active cases are increasing at an increasing rate. 
-     Negative values mean that active cases are increasing at a decreasing rate. 
-     Well, not really. The math is off for now.")
+     Negative values mean that active cases are increasing at a decreasing rate.")
+
+covplot + 
+  aes(x=Confirmed, y=`Day-to-day change of confirmed cases`, colour=admin0) +
+  scale_x_continuous(labels = scales::comma) + 
+  labs(title = "Rate of change of number of cases by\nthe point in the pandemic in which each country is", 
+     caption = "This is the chart that really shows how truly screwed the US is.\nI'll add some explanation since it's not easy to read.")
 
 ```
 
 ## To do
 
-* switch data source to ECDC or JHU?
+* switch data source to ECDC?
 * add country population, compute cases per capita
 * compute and chart moving window weekly (3-day?) averages, because these charts are a mess
 

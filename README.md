@@ -1,4 +1,4 @@
-some covid-19 charts
+Some COVID-19 charts
 ================
 
 ## Parameters
@@ -6,49 +6,50 @@ some covid-19 charts
 All data points where confirmed cases are below the `threshold` are
 discarded, which makes for cleaner charts. This is because the number of
 cases tends to exhibit nice exponential behaviour from 10 or so cases
-upwards. `chart_list` defines which countries to chart. Duh.
+upwards. `places_to_chart` defines which countries to chart. Duh.
 
 ``` r
 threshold = 10
-chart_list = c("Switzerland", "Italy", "China", "Armenia")
+places_to_chart = c("Switzerland", "Italy", "China", "Poland", "US")
 ```
 
 ## Load data
 
 ``` r
 library(tidyverse)
+library(zoo)
+```
 
+    ## Warning: package 'zoo' was built under R version 3.6.3
 
-Confirmed <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
-Deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
-Recovered <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
-isoalpha3 <- read_csv('https://gist.githubusercontent.com/tadast/8827699/raw/7255fdfbf292c592b75cf5f7a19c16ea59735f74/countries_codes_and_coordinates.csv')%>%
-  select(Country, `Alpha-3 code`) %>%
-  rename(iso_alpha3 = `Alpha-3 code`)
+``` r
+confirmed_raw <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+deaths_raw <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+recovered_raw <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv")
 
-tidy_CSSE <- function(data, value_col = "Confirmed"){
-  data%>%
+# isoalpha3 <- read_csv('https://gist.githubusercontent.com/tadast/8827699/raw/7255fdfbf292c592b75cf5f7a19c16ea59735f74/countries_codes_and_coordinates.csv') %>%
+#   select(Country, `Alpha-3 code`) %>%
+#   rename(iso_alpha3 = `Alpha-3 code`)
+
+tidy_CSSE <- function(data, value_col){
+
+    sum_col <- paste0(value_col)
+    new_col <- paste0(enquo(value_col))[2]
+
+    data %>%
     rename('admin1' = 'Province/State',
-           'admin0' = 'Country/Region')%>%
-    pivot_longer(cols = contains("/"), names_to = 'date_raw', values_to = value_col)%>%
-    select(-Lat, -Long)%>%
-    mutate(Date = as.Date(date_raw, format = "%m/%d/%y"))
-}
-
-tidy_CSSE_admin0 <- function(data, value_col = "Confirmed"){
-  sum_col <- paste0(value_col)
-  new_col <- paste0(enquo(value_col))[2]
-
-  data %>%
-    group_by(admin0, Date)%>%
-    summarise(!!new_col := sum(!!sym(sum_col)))%>%
-    left_join(isoalpha3, by = c('admin0' = 'Country'))%>%
-    mutate(unique_id = paste0(iso_alpha3, Date))%>%
+           'admin0' = 'Country/Region') %>%
+    select(-Lat, -Long) %>%
+    pivot_longer(cols = contains("/"), names_to = 'date_raw', values_to = value_col) %>%
+    mutate(Date = as.Date(date_raw, format = "%m/%d/%y")) %>%
+    group_by(admin0, Date) %>%
+    summarise(!!new_col := sum(!!sym(sum_col))) %>%
+    # left_join(isoalpha3, by = c('admin0' = 'Country')) %>%
+    mutate(unique_id = paste0(admin0, Date)) %>%
     ungroup()
   }
 
-
-confirmed_tidy <- tidy_CSSE_admin0(tidy_CSSE(Confirmed, value_col = 'Confirmed'), value_col = 'Confirmed')
+confirmed_tidy <- tidy_CSSE(confirmed_raw, "Confirmed")
 ```
 
     ## Warning: Using `as.character()` on a quosure is deprecated as of rlang 0.3.0.
@@ -56,8 +57,8 @@ confirmed_tidy <- tidy_CSSE_admin0(tidy_CSSE(Confirmed, value_col = 'Confirmed')
     ## This warning is displayed once per session.
 
 ``` r
-deaths_tidy <- tidy_CSSE_admin0(tidy_CSSE(Deaths, value_col = 'Deaths'), value_col = 'Deaths')
-recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered'), value_col = 'Recovered')
+deaths_tidy <- tidy_CSSE(deaths_raw, "Deaths")
+recovered_tidy <- tidy_CSSE(recovered_raw, "Recovered")
 ```
 
 ## Process
@@ -72,10 +73,13 @@ recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered')
   mutate(Active = Confirmed - (Recovered + Deaths),
          Day = row_number(1:n()),
          Mortality = Deaths/Confirmed*100,
-         `New cases daily percentage change` = (Confirmed/lag(Confirmed)-1)*100,
-         `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
-         `Daily change of daily percentage change` = 
-           `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
+         confirmed_delta = (Confirmed/lag(Confirmed)-1)*100,
+         `Day-to-day change of confirmed cases` = rollmean(x = confirmed_delta, k = 3, align = "right", fill = NA),
+         confirmed_delta_delta = (`Day-to-day change of confirmed cases`/lag(`Day-to-day change of confirmed cases`)-1)*100,
+         `Day-to-day change of rate of change of number of confirmed cases` = rollmean(x = confirmed_delta_delta, k = 6, align = "right", fill = NA),
+         # `Active cases daily percentage change` = (Active/lag(Active)-1)*100,
+         # `Daily change of daily percentage change` = 
+         #   `Active cases daily percentage change` - lag(`Active cases daily percentage change`)
          ) ->
   all_data_admin0
 ```
@@ -84,8 +88,8 @@ recovered_tidy <- tidy_CSSE_admin0(tidy_CSSE(Recovered, value_col = 'Recovered')
 
 ``` r
 all_data_admin0 %>%
-  filter(admin0 %in% chart_list) %>%
-  ggplot() + geom_line(alpha=.6) + theme_minimal() ->
+  filter(admin0 %in% places_to_chart) %>%
+  ggplot() + geom_line() + theme_minimal() ->
   covplot
 
 covplot + aes(x=Date, y=Active, colour=admin0) +
@@ -93,73 +97,59 @@ covplot + aes(x=Date, y=Active, colour=admin0) +
   labs(title = "Active cases by date, log scale", colour = "Country") 
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+![](readme_files/figure-gfm/chart-1.png)<!-- -->
 
 ``` r
-covplot + aes(x=Date, y=Active, colour=admin0) +
-  aes(x=Day, y=Active, colour=admin0) +
+covplot + aes(x=Day, y=Active, colour=admin0) +
   scale_y_continuous(labels = scales::comma) + labs(title = paste("Active cases by day, since the day", threshold, "cases were first recorded"))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+![](readme_files/figure-gfm/chart-2.png)<!-- -->
 
 ``` r
 covplot + 
-  aes(x=Date, y=`New cases daily percentage change`, colour=admin0)+ geom_smooth(se=F) +
-  ylim(0, 50) +
+  aes(x=Date, y=`Day-to-day change of confirmed cases`, colour=admin0)+ 
+  # geom_smooth(se=F) +
+  # ylim(0, 50) +
   labs(title = "Number of new cases compared to previous day, per cent", 
+       subtitle = "3 day rolling mean",
        caption = "Anything above zero means new cases are being recorded. 
        Daily change of 26% means doubling of case number every 3 days.")
 ```
 
-    ## `geom_smooth()` using method = 'loess' and formula 'y ~ x'
+    ## Warning: Removed 15 rows containing missing values (geom_path).
 
-    ## Warning: Removed 15 rows containing non-finite values (stat_smooth).
-
-    ## Warning: Removed 6 rows containing missing values (geom_path).
-
-    ## Warning: Removed 22 rows containing missing values (geom_smooth).
-
-![](readme_files/figure-gfm/unnamed-chunk-1-3.png)<!-- -->
+![](readme_files/figure-gfm/chart-3.png)<!-- -->
 
 ``` r
 covplot + 
-  aes(x=Date, y=`Daily change of daily percentage change`, colour=admin0) + 
-  geom_smooth(se=F) + ylim(-10, 10) +
+  aes(x=Date, y=`Day-to-day change of rate of change of number of confirmed cases`, colour=admin0) + 
+  # geom_smooth(se=F) + 
   labs(title = "Change of speed of increase of active cases", 
+       subtitle = "7 day rolling mean",
      caption = "Positive values mean that active cases are increasing at an increasing rate. 
-     Negative values mean that active cases are increasing at a decreasing rate. 
-     Well, not really. The math is off for now.")
+     Negative values mean that active cases are increasing at a decreasing rate.")
 ```
 
-    ## `geom_smooth()` using method = 'loess' and formula 'y ~ x'
+    ## Warning: Removed 49 rows containing missing values (geom_path).
 
-    ## Warning: Removed 51 rows containing non-finite values (stat_smooth).
+![](readme_files/figure-gfm/chart-4.png)<!-- -->
 
-    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
-    ## parametric, : span too small. fewer data values than degrees of freedom.
+``` r
+covplot + 
+  aes(x=Confirmed, y=`Day-to-day change of confirmed cases`, colour=admin0) +
+  scale_x_continuous(labels = scales::comma) + 
+  labs(title = "Rate of change of number of cases by\nthe point in the pandemic in which each country is", 
+     caption = "This is the chart that really shows how truly screwed the US is.\nI'll add some explanation since it's not easy to read.")
+```
 
-    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
-    ## parametric, : pseudoinverse used at 18342
+    ## Warning: Removed 15 rows containing missing values (geom_path).
 
-    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
-    ## parametric, : neighborhood radius 2.025
-
-    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
-    ## parametric, : reciprocal condition number 0
-
-    ## Warning in simpleLoess(y, x, w, span, degree = degree, parametric =
-    ## parametric, : There are other near singularities as well. 9.1506
-
-    ## Warning: Removed 17 rows containing missing values (geom_path).
-
-    ## Warning: Removed 11 rows containing missing values (geom_smooth).
-
-![](readme_files/figure-gfm/unnamed-chunk-1-4.png)<!-- -->
+![](readme_files/figure-gfm/chart-5.png)<!-- -->
 
 ## To do
 
-  - switch data source to ECDC or JHU?
+  - switch data source to ECDC?
 
   - add country population, compute cases per capita
 
