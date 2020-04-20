@@ -9,8 +9,8 @@ cases tends to exhibit nice exponential behaviour from 10 or so cases
 upwards. `places_to_chart` defines which countries to chart. Duh.
 
 ``` r
-threshold = 10
-places_to_chart = c("Switzerland", "Italy", "China", "Poland", "US")
+threshold = 100
+places_to_chart = c("Switzerland", "Poland", "Spain", "Italy", "United Kingdom", "US")
 ```
 
 ## Load data
@@ -93,8 +93,10 @@ all_data_admin0 %>%
   covplot
 
 covplot + aes(x=Date, y=Active, colour=admin0) +
+  scale_x_date(date_breaks = "1 week", date_labels ="%a\n%d %b") + 
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
   scale_y_log10(labels = scales::comma) + 
-  labs(title = "Active cases by date, log scale", colour = "Country") 
+  labs(title = "Active cases by date, log scale", colour = "Country")
 ```
 
 ![](readme_files/figure-gfm/chart-1.png)<!-- -->
@@ -117,7 +119,7 @@ covplot +
        Daily change of 26% means doubling of case number every 3 days.")
 ```
 
-    ## Warning: Removed 15 rows containing missing values (geom_path).
+    ## Warning: Removed 18 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/chart-3.png)<!-- -->
 
@@ -125,13 +127,13 @@ covplot +
 covplot + 
   aes(x=Date, y=`Day-to-day change of rate of change of number of confirmed cases`, colour=admin0) + 
   # geom_smooth(se=F) + 
-  labs(title = "Change of speed of increase of active cases", 
+  labs(title = "Change of speed of increase of confirmed cases", 
        subtitle = "7 day rolling mean",
-     caption = "Positive values mean that active cases are increasing at an increasing rate. 
-     Negative values mean that active cases are increasing at a decreasing rate.")
+     caption = "Positive values mean that confirmed cases are increasing at an increasing rate. 
+     Negative values mean that confirmed cases are increasing at a decreasing rate.")
 ```
 
-    ## Warning: Removed 49 rows containing missing values (geom_path).
+    ## Warning: Removed 54 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/chart-4.png)<!-- -->
 
@@ -139,22 +141,18 @@ covplot +
 covplot + 
   aes(x=Confirmed, y=`Day-to-day change of confirmed cases`, colour=admin0) +
   scale_x_continuous(labels = scales::comma) + 
-  labs(title = "Rate of change of number of cases by\nthe point in the pandemic in which each country is", 
-     caption = "This is the chart that really shows how truly screwed the US is.\nI'll add some explanation since it's not easy to read.")
+  labs(title = "Rate of change of number of confirmed cases by\nthe point in the pandemic in which each country is"
+       #   ,  caption = "This is the chart that really shows how truly screwed the US is."
+)
 ```
 
-    ## Warning: Removed 15 rows containing missing values (geom_path).
+    ## Warning: Removed 18 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/chart-5.png)<!-- -->
 
 ## To do
 
-  - switch data source to ECDC?
-
   - add country population, compute cases per capita
-
-  - compute and chart moving window weekly (3-day?) averages, because
-    these charts are a mess
 
   - labels
     
@@ -179,3 +177,12 @@ covplot +
   - add a “days since first case” metric as an alternative x-axis to
     actual date
   - add deaths and recovered cases, compute active cases
+  - compute and chart moving window weekly (3-day?) averages, because
+    these charts are a mess
+
+#### Not done
+
+  - switch data source to ECDC
+    
+      - it’s nice in that it comes as a single JSON and has population
+        number, but doesn’t inclde recovered case numbers.
