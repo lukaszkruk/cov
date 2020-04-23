@@ -10,7 +10,7 @@ upwards. `places_to_chart` defines which countries to chart. Duh.
 
 ``` r
 threshold = 100
-places_to_chart = c("Switzerland", "Poland", "Spain", "Italy", "United Kingdom", "US")
+places_to_chart = c("Switzerland", "Poland", "New Zealand")
 ```
 
 ## Load data
@@ -119,7 +119,7 @@ covplot +
        Daily change of 26% means doubling of case number every 3 days.")
 ```
 
-    ## Warning: Removed 18 rows containing missing values (geom_path).
+    ## Warning: Removed 9 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/chart-3.png)<!-- -->
 
@@ -133,7 +133,7 @@ covplot +
      Negative values mean that confirmed cases are increasing at a decreasing rate.")
 ```
 
-    ## Warning: Removed 54 rows containing missing values (geom_path).
+    ## Warning: Removed 27 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/chart-4.png)<!-- -->
 
@@ -146,7 +146,7 @@ covplot +
 )
 ```
 
-    ## Warning: Removed 18 rows containing missing values (geom_path).
+    ## Warning: Removed 9 rows containing missing values (geom_path).
 
 ![](readme_files/figure-gfm/chart-5.png)<!-- -->
 
