@@ -10,7 +10,7 @@ upwards. `places_to_chart` defines which countries to chart. Duh.
 
 ``` r
 threshold = 100
-places_to_chart = c("Switzerland", "Poland", "New Zealand")
+places_to_chart = c("Switzerland", "Poland", "Spain")
 ```
 
 ## Load data

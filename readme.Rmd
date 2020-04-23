@@ -15,7 +15,7 @@ All data points where confirmed cases are below the ``threshold`` are discarded,
 
 ```{r variables}
 threshold = 100
-places_to_chart = c("Switzerland", "Poland", "New Zealand")
+places_to_chart = c("Switzerland", "Poland", "Spain")
 ```
 
 ## Load data
